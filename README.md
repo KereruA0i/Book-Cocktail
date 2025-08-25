@@ -1,72 +1,112 @@
-【最終版】BookCocktail Discordボット セットアップガイド
-このガイドは、APIサーバーと連携する高機能なDiscordボットをセットアップするためのものです。
+# 🍸 BookCocktail Discord Bot
 
-ステップ1: プロジェクトの準備
-新しいフォルダを作成: PCにプロジェクト用の新しい空のフォルダを作成します。（例: bookcocktail-bot-final）
+書籍のタイトルを入力すると、その本に関する「相補的な一杯」「対照的な一杯」「意外な一杯」を提案してくれるインテリジェントなDiscordボットです。Google Search APIで情報を収集し、Gemini APIが動的に解説文を生成します。
 
-ファイルを保存: 作成したフォルダに、app.py と bot.py の2つのファイルを保存します。
+---
 
-.envファイルを作成: 同じフォルダに .env という名前のファイルを新規作成し、4種類すべてのキーを記述して保存します。
+## 🔧 必要なもの (Prerequisites)
 
-# Google Custom Search API
-GOOGLE_API_KEY=あなたのGoogle Custom Search APIキー
-SEARCH_ENGINE_ID=あなたの検索エンジンID
+* **Python 3.8** 以上
+* **Git**
+* **Visual Studio Code** (またはお好きなコードエディタ)
+* 各種APIキー (下記参照)
 
-# Gemini API
-GEMINI_API_KEY=あなたのGemini APIキー
+---
+
+## ⚙️ セットアップガイド (Installation & Setup)
+
+### ステップ1: プロジェクトのクローンと移動
+
+まず、このリポジトリをあなたのPCにダウンロードします。ターミナルで以下のコマンドを実行してください。
+
+```bash
+git clone [https://github.com/KereruA0i/Book-Cocktail.git](https://github.com/KereruA0i/Book-Cocktail.git)
+cd Book-Cocktail
+```
+
+### ステップ2: APIキーと`.env`ファイルの設定
+
+プロジェクトの動作には4種類のAPIキーが必要です。プロジェクトのルートフォルダ（`app.py`と同じ場所）に`.env`という名前のファイルを作成し、以下の内容を貼り付けて、あなたのキーに書き換えてください。
+
+**`.env`**
+```
+# .env ファイル
+
+# Google Custom Search API (ウェブ検索用)
+GOOGLE_API_KEY="あなたのGoogle Custom Search APIキーをここに入力"
+SEARCH_ENGINE_ID="あなたの検索エンジンIDをここに入力"
+
+# Gemini API (文章生成用)
+GEMINI_API_KEY="あなたのGemini APIキーをここに入力"
 
 # Discord Bot
-DISCORD_TOKEN=あなたのDiscordボットのトークン
+DISCORD_TOKEN="あなたのDiscordボットのトークンをここに入力"
+```
+**重要**: この`.env`ファイルは、秘密情報が含まれるため絶対にGitでコミットしないでください。(`gitignore`に含まれているので通常は大丈夫です)
 
-ステップ2: Python環境とライブラリのインストール
-仮想環境の作成と有効化
+### ステップ3: Python環境の構築
 
-プロジェクトフォルダ内でターミナルを開きます。
+プロジェクト専用の仮想環境を作成し、必要なライブラリをインストールします。
 
-仮想環境を作成 (初回のみ): python3 -m venv venv
+1.  **仮想環境を作成 (初回のみ):**
+    ```bash
+    python3 -m venv venv
+    ```
 
-仮想環境を有効化 (ターミナルを開くたびに実行):
+2.  **仮想環境を有効化 (ターミナルを開くたびに実行):**
+    * **macOS / Linux:**
+        ```bash
+        source venv/bin/activate
+        ```
+    * **Windows:**
+        ```bash
+        .\venv\Scripts\activate
+        ```
+    *(ターミナルの行頭に `(venv)` と表示されれば成功です)*
 
-Windows: .\venv\Scripts\activate
+3.  **必要なライブラリをインストール:**
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+    *(注: `requirements.txt` に必要なライブラリがすべて記載されています)*
 
-Mac/Linux: source venv/bin/activate
+### ステップ4: VS Codeの設定 (推奨)
 
-最新版ライブラリのインストール
+エディタ上で `インポートを解決できません` というエラーが出る場合は、VS Codeに仮想環境の場所を教えてあげます。
 
-仮想環境が有効化されているターミナルで、以下のコマンドを実行します。
+1.  **コマンドパレットを開く**: `Cmd`+`Shift`+`P` (Mac) / `Ctrl`+`Shift`+`P` (Windows)
+2.  **インタープリターを選択**: `Python: Select Interpreter` と入力して選択。
+3.  **仮想環境を指定**: `./venv/bin/python` というパスが含まれているものを選択します。
 
-pip install --upgrade pip
-pip install flask discord.py requests python-dotenv "google-api-python-client>2.0.0" google-generativeai
+---
 
-ステップ3: VS Codeの設定 (推奨)
-エディタ上で インポートを解決できません というエラーが出る場合は、以下の設定を行ってください。
+## 🚀 アプリケーションの実行
 
-VS Codeでフォルダを開く: 作成したプロジェクトフォルダを開きます。
+**重要**: APIサーバーとDiscordボットは、それぞれ**別のターミナルで同時に**動かす必要があります。
 
-コマンドパレットを開く: Command + Shift + P (Mac) または Ctrl + Shift + P (Windows)
+#### ➡️ ターミナル 1: APIサーバーを起動
 
-インタープリターを選択: Python: Select Interpreter と入力し、表示されたコマンドを選択します。
-
-仮想環境を選択: ./venv/bin/python というパスが含まれているものを選択します。
-
-ステップ4: アプリケーションの実行
-重要: APIサーバーとDiscordボットは、それぞれ別のターミナルで同時に動かす必要があります。
-
-ターミナル1 (APIサーバー用):
-
-プロジェクトフォルダでターミナルを開き、仮想環境を有効化します。
-
-以下のコマンドでAPIサーバーを起動します。
-
+```bash
+# 仮想環境が有効になっていることを確認
 python app.py
+```
 
-ターミナル2 (Discordボット用):
+#### ➡️ ターミナル 2: Discordボットを起動
 
-別のターミナルをプロジェクトフォルダで開き、仮想環境を有効化します。
-
-以下のコマンドでDiscordボットを起動します。
-
+```bash
+# こちらも仮想環境が有効になっていることを確認
 python bot.py
+```
 
-ステップ5: Discordでテスト
-ボットを招待したDiscordサーバーで /cocktail コマンドを試し、Geminiによって生成された完全な解説文と、気の利いた「最後の一ひねり」をお楽しみください。
+---
+
+## 🎮 使い方 (Usage)
+
+ボットを招待したDiscordサーバーで、以下のスラッシュコマンドを実行します。
+
+```
+/cocktail book_title:星の王子さま
+```
+
+Geminiによって生成された、あなただけのブックカクテルをお楽しみください！
