@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookCocktail Mixologist</title>
+    <!-- 外部CSSファイルを読み込む -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>BookCocktail Mixologist 🍸</h1>
+    <form method="post">
+        <input type="text" name="book_title" placeholder="書籍のタイトルを入力..." required value="{{ book_title_value }}">
+        <button type="submit">カクテルを注文</button>
+    </form>
+
+    {% if error %}
+        <p class="error-message">{{ error }}</p>
+    {% endif %}
+
+    {% if cocktail %}
+    <div class="cocktail-result">
+        <h2>『{{ cocktail.book_title }}』</h2>
+        <div class="section">
+            <h3>■ 作品の要約</h3>
+            <p>{{ cocktail.summary | safe }}</p>
+        </div>
+        <hr>
+        <div class="section">
+            <h3>🍷 相補的な一杯</h3>
+            {% if cocktail.complementary %}
+                <a href="{{ cocktail.complementary.url }}" target="_blank">{{ cocktail.complementary.title }}</a>
+                <p>→ 解説: {{ cocktail.complementary.commentary }}</p>
+            {% else %}
+                <p>関連情報が見つかりませんでした。</p>
+            {% endif %}
+        </div>
+        <div class="section">
+            <h3>🍋 対照的な一杯</h3>
+            {% if cocktail.contrasting %}
+                <a href="{{ cocktail.contrasting.url }}" target="_blank">{{ cocktail.contrasting.title }}</a>
+                <p>→ 解説: {{ cocktail.contrasting.commentary }}</p>
+            {% else %}
+                <p>関連情報が見つかりませんでした。</p>
+            {% endif %}
+        </div>
+        <div class="section">
+            <h3>🧂 意外な一杯</h3>
+            {% if cocktail.tangent %}
+                <a href="{{ cocktail.tangent.url }}" target="_blank">{{ cocktail.tangent.title }}</a>
+                <p>→ 解説: {{ cocktail.tangent.commentary }}</p>
+            {% else %}
+                <p>関連情報が見つかりませんでした。</p>
+            {% endif %}
+        </div>
+        <div class="section">
+            <h3 class="final-twist">🎭 最後の一ひねり</h3>
+            <p class="final-twist">「{{ cocktail.twist }}」</p>
+        </div>
+    </div>
+    {% endif %}
+</body>
+</html>

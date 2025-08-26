@@ -1,112 +1,114 @@
-# 🍸 BookCocktail Discord Bot
+# 🍸 BookCocktail Project
 
-書籍のタイトルを入力すると、その本に関する「相補的な一杯」「対照的な一杯」「意外な一杯」を提案してくれるインテリジェントなDiscordボットです。Google Search APIで情報を収集し、Gemini APIが動的に解説文を生成します。
+書籍のタイトルを入力すると、その本に関する「相補的な一杯」「対照的な一杯」「意外な一杯」を提案してくれるインテリジェントなアプリケーションです。このプロジェクトは、Webアプリ版とDiscordボット版の両方を提供します。
+
+## 🏛️ プロジェクト構成
+
+このプロジェクトは、役割ごとに3つの主要なファイルに分割されています。
+
+1.  **`api_server.py` (頭脳 🧠)**
+    * BookCocktailを生成する全てのロジック（Google検索、Geminiによる文章生成）を担当するAPIサーバーです。WebアプリとDiscordボットの両方が、このサーバーを呼び出して結果を得ます。
+
+2.  **`webapp.py` (Webアプリ受付 🌐)**
+    * ブラウザでアクセスできるユーザーインターフェースを提供します。ユーザーからのリクエストを受け取り、`api_server.py`に問い合わせて結果を表示します。
+
+3.  **`discord_bot.py` (Discordボト受付 🤖)**
+    * Discord上でのスラッシュコマンドを待ち受けます。コマンドが実行されると、`api_server.py`に問い合わせて結果をDiscordに投稿します。
 
 ---
 
-## 🔧 必要なもの (Prerequisites)
+## ⚙️ セットアップガイド
 
-* **Python 3.8** 以上
-* **Git**
-* **Visual Studio Code** (またはお好きなコードエディタ)
-* 各種APIキー (下記参照)
+### ステップ1: プロジェクトの準備
 
----
-
-## ⚙️ セットアップガイド (Installation & Setup)
-
-### ステップ1: プロジェクトのクローンと移動
-
-まず、このリポジトリをあなたのPCにダウンロードします。ターミナルで以下のコマンドを実行してください。
-
-```bash
-git clone [https://github.com/KereruA0i/Book-Cocktail.git](https://github.com/KereruA0i/Book-Cocktail.git)
-cd Book-Cocktail
-```
-
-### ステップ2: APIキーと`.env`ファイルの設定
-
-プロジェクトの動作には4種類のAPIキーが必要です。プロジェクトのルートフォルダ（`app.py`と同じ場所）に`.env`という名前のファイルを作成し、以下の内容を貼り付けて、あなたのキーに書き換えてください。
-
-**`.env`**
-```
-# .env ファイル
-
-# Google Custom Search API (ウェブ検索用)
-GOOGLE_API_KEY="あなたのGoogle Custom Search APIキーをここに入力"
-SEARCH_ENGINE_ID="あなたの検索エンジンIDをここに入力"
-
-# Gemini API (文章生成用)
-GEMINI_API_KEY="あなたのGemini APIキーをここに入力"
-
-# Discord Bot
-DISCORD_TOKEN="あなたのDiscordボットのトークンをここに入力"
-```
-**重要**: この`.env`ファイルは、秘密情報が含まれるため絶対にGitでコミットしないでください。(`gitignore`に含まれているので通常は大丈夫です)
-
-### ステップ3: Python環境の構築
-
-プロジェクト専用の仮想環境を作成し、必要なライブラリをインストールします。
-
-1.  **仮想環境を作成 (初回のみ):**
+1.  **リポジトリをクローン:**
     ```bash
-    python3 -m venv venv
+    git clone [https://github.com/KereruA0i/Book-Cocktail.git](https://github.com/KereruA0i/Book-Cocktail.git)
+    cd Book-Cocktail
     ```
 
-2.  **仮想環境を有効化 (ターミナルを開くたびに実行):**
-    * **macOS / Linux:**
-        ```bash
-        source venv/bin/activate
-        ```
-    * **Windows:**
-        ```bash
-        .\venv\Scripts\activate
-        ```
-    *(ターミナルの行頭に `(venv)` と表示されれば成功です)*
+2.  **`.env`ファイルの設定:**
+    プロジェクトのルートに`.env`ファイルを作成し、4種類のAPIキーをすべて設定してください。
+    ```
+    # .env ファイル
+    GOOGLE_API_KEY="YOUR_GOOGLE_SEARCH_API_KEY"
+    SEARCH_ENGINE_ID="YOUR_SEARCH_ENGINE_ID"
+    GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+    DISCORD_TOKEN="YOUR_DISCORD_BOT_TOKEN"
+    ```
 
-3.  **必要なライブラリをインストール:**
+### ステップ2: Python環境の構築
+
+1.  **仮想環境を作成・有効化:**
+    ```bash
+    # 作成 (初回のみ)
+    python3 -m venv venv
+    # 有効化 (ターミナルを開くたび)
+    source venv/bin/activate
+    ```
+
+2.  **ライブラリをインストール:**
     ```bash
     pip install --upgrade pip
     pip install -r requirements.txt
     ```
-    *(注: `requirements.txt` に必要なライブラリがすべて記載されています)*
-
-### ステップ4: VS Codeの設定 (推奨)
-
-エディタ上で `インポートを解決できません` というエラーが出る場合は、VS Codeに仮想環境の場所を教えてあげます。
-
-1.  **コマンドパレットを開く**: `Cmd`+`Shift`+`P` (Mac) / `Ctrl`+`Shift`+`P` (Windows)
-2.  **インタープリターを選択**: `Python: Select Interpreter` と入力して選択。
-3.  **仮想環境を指定**: `./venv/bin/python` というパスが含まれているものを選択します。
 
 ---
 
-## 🚀 アプリケーションの実行
+## 🚀 ローカルでの実行方法
 
-**重要**: APIサーバーとDiscordボットは、それぞれ**別のターミナルで同時に**動かす必要があります。
+`api_server.py`は、WebアプリとDiscordボットの両方にとって必須です。
 
-#### ➡️ ターミナル 1: APIサーバーを起動
+#### 1. APIサーバーを起動 (必須)
 
+まず、ターミナルで以下のコマンドを実行して、頭脳となるAPIサーバーを起動します。
 ```bash
-# 仮想環境が有効になっていることを確認
-python app.py
+# ターミナル 1
+python api_server.py
 ```
 
-#### ➡️ ターミナル 2: Discordボットを起動
+#### 2. Webアプリ または Discordボットを起動
 
-```bash
-# こちらも仮想環境が有効になっていることを確認
-python bot.py
-```
+**別の**ターミナルを開き、使いたい方の受付を起動します。
+
+* **Webアプリ版を使いたい場合:**
+    ```bash
+    # ターミナル 2
+    python webapp.py
+    ```
+    その後、ブラウザで `http://127.0.0.1:5000` にアクセスしてください。
+
+* **Discordボット版を使いたい場合:**
+    ```bash
+    # ターミナル 2
+    python discord_bot.py
+    ```
 
 ---
 
-## 🎮 使い方 (Usage)
+## ☁️ Webアプリ版のRenderデプロイガイド
 
-ボットを招待したDiscordサーバーで、以下のスラッシュコマンドを実行します。
+このセクションでは、**Webアプリ版**をインターネットに公開する手順を説明します。これには、APIサーバーとWebアプリの2つをRenderにデプロイする必要があります。
 
-```
-/cocktail book_title:星の王子さま
-```
+### Part 1: APIサーバーのデプロイ
 
-Geminiによって生成された、あなただけのブックカクテルをお楽しみください！
+1.  **Renderで新しいWebサービスを作成**し、GitHubリポジトリに接続します。
+2.  **サービス詳細設定:**
+    * **Name**: `book-cocktail-api` など、APIサーバーだと分かる名前をつけます。
+    * **Start Command**: `gunicorn api_server:app`
+    * その他（Region, Branch, Build Command, Instance Type）は通常通り設定します。
+3.  **環境変数を設定:** `GOOGLE_API_KEY`, `SEARCH_ENGINE_ID`, `GEMINI_API_KEY` の3つを設定します。
+4.  **デプロイを開始**し、成功したら公開URL（例: `https://book-cocktail-api.onrender.com`）をコピーしておきます。
+
+### Part 2: Webアプリのデプロイ
+
+1.  **Renderで"もう一つ"新しいWebサービスを作成**し、同じGitHubリポジトリに接続します。
+2.  **サービス詳細設定:**
+    * **Name**: `book-cocktail-webapp` など、Webアプリだと分かる名前をつけます。
+    * **Start Command**: `gunicorn webapp:app`
+3.  **環境変数を設定:**
+    * **`API_SERVER_URL`** という名前で新しい環境変数を追加します。
+    * **Value**には、Part 1でコピーした**APIサーバーの公開URL**の末尾に`/generate-cocktail`を付け加えたものを貼り付けます。（例: `https://book-cocktail-api.onrender.com/generate-cocktail`）
+4.  **デプロイを開始**します。
+
+すべて成功すると、Webアプリの公開URLにアクセスして、世界中のどこからでもBookCocktailが利用できるようになります！
