@@ -74,11 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p>${data.summary}</p>
                 </div>
                 <hr>
-                ${createSourceSection('相補的な一杯', '🍷', data.complementary)}
-                ${createSourceSection('対照的な一杯', '🍋', data.contrasting)}
-                ${createSourceSection('意外な一杯', '🧂', data.tangent)}
+                ${createSourceSection('ベース', '🍸', data.complementary)}
+                ${createSourceSection('スパイス', '🍅', data.contrasting)}
+                ${createSourceSection('隠し味', '🌶️', data.tangent)}
                 <div class="section">
-                    <h3 class="final-twist">🎭 最後の一ひねり</h3>
+                    <h3 class="final-twist">🎭 おつまみ</h3>
                     <p class="final-twist">「${data.twist}」</p>
                 </div>
             </div>

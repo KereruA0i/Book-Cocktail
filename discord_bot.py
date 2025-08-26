@@ -21,8 +21,8 @@ def format_for_discord(data):
     """Formats the JSON data from the API server into a Discord-friendly string."""
     summary_text = f"### ■作品の要約\n{data.get('summary', '情報が見つかりませんでした。')}"
     parts = [summary_text]
-    icons = {"complementary": "🍷", "contrasting": "🍋", "tangent": "🧂"}
-    titles = {"complementary": "相補的な一杯", "contrasting": "対照的な一杯", "tangent": "意外な一杯"}
+    icons = {"complementary": "🍸", "contrasting": "🍅", "tangent": "🌶️"}
+    titles = {"complementary": "ベース", "contrasting": "スパイス", "tangent": "隠し味"}
 
     for key in ["complementary", "contrasting", "tangent"]:
         source_data = data.get(key)
@@ -33,7 +33,7 @@ def format_for_discord(data):
             text += "関連情報が見つかりませんでした。"
         parts.append(text)
         
-    twist_text = f"### 🎭 最後の一ひねり (Final Twist)\n「{data.get('twist', '')}」"
+    twist_text = f"### 🎭 おつまみ (Final Twist)\n「{data.get('twist', '')}」"
     parts.append(twist_text)
     
     return "\n\n---\n\n".join(parts)
