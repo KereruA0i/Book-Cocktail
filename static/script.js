@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ book_title: bookTitle }),
+                body: JSON.stringify({ user_input: bookTitle }),
             });
 
             if (!response.ok) {
@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${createSourceSection('スパイス', '🍅', data.contrasting)}
                 ${createSourceSection('隠し味', '🌶️', data.tangent)}
                 <div class="section">
-                    <h3 class="final-twist">🎭 おつまみ</h3>
+                    <h3 class="final-twist">🥜 おつまみ</h3>
                     <p class="final-twist">「${data.twist}」</p>
                 </div>
             </div>

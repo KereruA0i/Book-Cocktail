@@ -1,5 +1,5 @@
 # discord_bot.py
-# This bot listens for commands on Discord and calls the api_server.py.
+# This bot listens for commands on Discord and calls the app.py server.
 
 import os
 import discord
@@ -7,35 +7,34 @@ from discord import app_commands
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-API_SERVER_URL = "https://book-cocktail.onrender.com/api/cocktail"
+API_SERVER_URL = os.getenv('API_SERVER_URL', "http://127.0.0.1:5000/api/cocktail")
 
-# Setup Bot client
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 def format_for_discord(data):
-    """Formats the JSON data from the API server into a Discord-friendly string."""
+    # Use the title returned from the API
+    title_text = f"## 🍸 『{data.get('book_title', '無題の作品')}』のカクテル"
     summary_text = f"### ■作品の要約\n{data.get('summary', '情報が見つかりませんでした。')}"
-    parts = [summary_text]
+    parts = [title_text, summary_text]
+    
     icons = {"complementary": "🍸", "contrasting": "🍅", "tangent": "🌶️"}
     titles = {"complementary": "ベース", "contrasting": "スパイス", "tangent": "隠し味"}
 
     for key in ["complementary", "contrasting", "tangent"]:
         source_data = data.get(key)
-        text = f"### {icons[key]} {titles[key]} ({key.capitalize()})\n"
-        if source_data:
-            text += f"**[{source_data['title']}]({source_data['url']})**\n→ **解説:** {source_data['commentary']}"
+        text = f"### {icons[key]} {titles[key]}\n"
+        if source_data and source_data.get('url'):
+            text += f"**[{source_data.get('title', 'タイトル不明')}]({source_data.get('url')})**\n→ **解説:** {source_data.get('commentary', '')}"
         else:
             text += "関連情報が見つかりませんでした。"
         parts.append(text)
         
-    twist_text = f"### 🎭 おつまみ (Final Twist)\n「{data.get('twist', '')}」"
+    twist_text = f"### 🥜 おつまみ\n「{data.get('twist', '')}」"
     parts.append(twist_text)
-    
     return "\n\n---\n\n".join(parts)
 
 @client.event
@@ -44,20 +43,25 @@ async def on_ready():
     await tree.sync()
     print("Slash commands synced.")
 
-@tree.command(name="cocktail", description="書籍に基づいた思考のカクテルを提供します。")
-@app_commands.describe(book_title="書籍のタイトル")
-async def cocktail(interaction: discord.Interaction, book_title: str):
+@tree.command(name="cocktail", description="書籍のタイトルまたはURLから思考のカクテルを提供します。")
+@app_commands.describe(query="書籍のタイトルまたはURL")
+async def cocktail(interaction: discord.Interaction, query: str):
     await interaction.response.defer(thinking=True)
     try:
-        response = requests.post(API_SERVER_URL, json={'book_title': book_title}, timeout=120)
+        # The key in the JSON payload is 'user_input'
+        response = requests.post(API_SERVER_URL, json={'user_input': query}, timeout=120)
         response.raise_for_status()
         cocktail_data = response.json()
+        
+        if cocktail_data.get("error"):
+             await interaction.followup.send(f"エラー: {cocktail_data['error']}")
+             return
+
         formatted_text = format_for_discord(cocktail_data)
         await interaction.followup.send(formatted_text)
-
     except requests.exceptions.RequestException as e:
         print(f"API connection error: {e}")
-        await interaction.followup.send("カクテルサーバーへの接続に失敗しました。APIサーバーが起動しているか確認してください。")
+        await interaction.followup.send("カクテルサーバーへの接続に失敗しました。")
 
 if DISCORD_TOKEN:
     client.run(DISCORD_TOKEN)

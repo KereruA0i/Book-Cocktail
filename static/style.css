@@ -1,70 +1,103 @@
+/* --- Fonts --- */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Noto+Sans+JP:wght@300;400;700&display=swap');
+
+/* --- General --- */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    line-height: 1.6;
-    color: #333;
+    font-family: 'Noto Sans JP', sans-serif;
+    line-height: 1.7;
+    color: #e0e0e0;
     max-width: 800px;
     margin: 2rem auto;
-    padding: 0 1rem;
-    background-color: #f9f9f9;
+    padding: 0 1.5rem;
+    background-color: #121212;
 }
 
-h1, h2 {
-    color: #111;
+/* --- Typography --- */
+h1, h2, h3 {
+    font-family: 'Lora', serif;
+    color: #ffffff;
+    font-weight: 500;
 }
 
 h1 {
-    border-bottom: 2px solid #ddd;
-    padding-bottom: 0.5rem;
+    font-size: 2.5rem;
+    text-align: center;
+    border-bottom: 1px solid #c5a47e; /* Gold color */
+    padding-bottom: 1rem;
+    margin-bottom: 2rem;
+    letter-spacing: 2px;
 }
 
+h2 {
+    font-size: 2rem;
+    color: #c5a47e;
+}
+
+h3 {
+    font-size: 1.3rem;
+    border-left: 3px solid #c5a47e;
+    padding-left: 0.75rem;
+}
+
+/* --- Form Elements --- */
 form {
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
     display: flex;
-    gap: 0.5rem;
+    gap: 1rem;
 }
 
 input[type="text"] {
     flex-grow: 1;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 0.8rem 1rem;
+    border: 1px solid #444;
+    border-radius: 5px;
     font-size: 1rem;
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: #c5a47e;
+    box-shadow: 0 0 0 3px rgba(197, 164, 126, 0.2);
 }
 
 button {
-    padding: 0.75rem 1.5rem;
+    padding: 0.8rem 2rem;
     border: none;
-    background-color: #007bff;
-    color: white;
-    border-radius: 4px;
+    background: linear-gradient(145deg, #c5a47e, #b48e6a);
+    color: #121212;
+    font-weight: bold;
+    border-radius: 5px;
     font-size: 1rem;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 button:hover {
-    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(197, 164, 126, 0.2);
 }
 
+/* --- Result Display --- */
 .cocktail-result {
-    background-color: white;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 1.5rem;
+    background-color: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .section {
-    margin-bottom: 1.5rem;
-}
-
-.section h3 {
-    margin-top: 0;
+    margin-bottom: 2rem;
 }
 
 .section a {
-    color: #0056b3;
+    color: #c5a47e;
     text-decoration: none;
     font-weight: bold;
+    font-size: 1.1rem;
 }
 
 .section a:hover {
@@ -72,26 +105,30 @@ button:hover {
 }
 
 .section p {
-    margin: 0.25rem 0 0 0;
+    margin: 0.5rem 0 0 0;
+    color: #b0b0b0;
 }
 
 .final-twist {
     font-style: italic;
     text-align: center;
     margin-top: 2rem;
+    color: #c5a47e;
 }
 
 .error-message {
-    color: red;
+    color: #ff6b6b;
     font-weight: bold;
+    text-align: center;
 }
 
 hr {
     border: none;
-    border-top: 1px solid #eee;
-    margin: 2rem 0;
+    border-top: 1px solid #444;
+    margin: 2.5rem 0;
 }
-/* --- ローディング表示用のスタイル --- */
+
+/* --- Loading Spinner --- */
 .hidden {
     display: none;
 }
@@ -99,15 +136,15 @@ hr {
 #loading {
     text-align: center;
     margin: 2rem 0;
-    color: #555;
+    color: #888;
 }
 
 .spinner {
-    border: 4px solid rgba(0, 0, 0, 0.1);
+    border: 4px solid rgba(255, 255, 255, 0.1);
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    border-left-color: #007bff;
+    border-left-color: #c5a47e;
     margin: 0 auto 1rem;
     animation: spin 1s ease infinite;
 }
