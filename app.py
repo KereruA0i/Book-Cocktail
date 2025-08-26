@@ -1,6 +1,6 @@
 # app.py (Stable Unified Version with Corrected URL Handling)
-# This version fixes the critical bug that caused invalid search queries
-# by properly separating the URL summarization and cocktail generation steps.
+# This version fixes the critical bug that caused null/empty results
+# by redesigning the data generation logic for maximum stability.
 
 import os
 import random
@@ -32,7 +32,10 @@ def google_search(query, num=1):
         service = build("customsearch", "v1", developerKey=GOOGLE_API_KEY)
         result = service.cse().list(q=query, cx=SEARCH_ENGINE_ID, num=num).execute()
         items = result.get('items', [])
-        if not items: return None
+        if not items: 
+            print(" -> No results found.")
+            return None
+        print(" -> Found result.")
         return {"title": items[0].get('title'), "url": items[0].get('link'), "snippet": items[0].get('snippet', '')}
     except Exception as e:
         print(f"An error occurred during Google Search: {e}")
@@ -44,7 +47,7 @@ def call_gemini(prompt, expect_json=False):
     if not GEMINI_API_KEY: return None
     try:
         config = {}
-        model_name = 'gemini-1.5-flash' # Use flash for speed and generous limits
+        model_name = 'gemini-2.5-flash' # Use flash for speed and generous limits
         if expect_json:
             config = {"response_mime_type": "application/json"}
         
@@ -74,33 +77,34 @@ def generate_cocktail_data(user_input):
     is_url = user_input.strip().startswith('http')
 
     # --- [最重要改善点] ---
+    # Step 1: Establish a clear "book_title" and "summary_text" for the subject.
     if is_url:
         content = read_url_content(user_input)
         if not content:
             return {"error": "URLの内容を読み取れませんでした。"}
         
-        # Step 1: Get a clean title and summary from the URL content first.
         summarization_prompt = f"以下のテキストから、この記事の適切なタイトルと、内容の核心を突く3〜4文の要約を生成してください。タイトルと要約だけを返してください。例:\nタイトル: 宇宙での妊娠のリスク\n要約: この記事は...\n\nテキスト: {content[:15000]}"
         initial_summary = call_gemini(summarization_prompt)
         
         if not initial_summary:
             return {"error": "URLの内容から要約を生成できませんでした。"}
         
-        # Extract the title and summary cleanly
         lines = initial_summary.splitlines()
         book_title = lines[0].replace("タイトル:", "").strip() if lines else "無題の記事"
         summary_text = "\n".join(lines[1:]).replace("要約:", "").strip()
     else:
-        # For titles, get a summary snippet from Google Search
         summary_source = google_search(f'"{book_title}" 要約 OR あらすじ')
         if summary_source:
             summary_text = summary_source['snippet']
+        else:
+            # If no summary is found, use the title itself as the context.
+            summary_text = book_title 
 
-    # --- The rest of the logic now uses a clean `book_title` ---
+    # Step 2: Gather supplementary sources. These can be None.
     comp_source = google_search(f'"{book_title}" 論文 OR 学術的考察')
     cont_source = google_search(f'"{book_title}" 批判 OR 問題点')
 
-    # Now, call Gemini for the main cocktail generation
+    # Step 3: Call Gemini for the main cocktail generation with a robust prompt.
     cocktail_schema = {
         "type": "object",
         "properties": {
@@ -110,17 +114,34 @@ def generate_cocktail_data(user_input):
         }, "required": ["summary", "complementary_commentary", "contrasting_commentary", "tangent_theme", "twist"]
     }
     
-    main_prompt = f"""書籍または記事『{book_title}』に関する以下の情報を元に、BookCocktailを生成し、JSON形式で出力してください。# 情報源- **要約用**: {summary_text}- **ベース（相補的）用**: {comp_source['snippet'] if comp_source else "情報なし"}- **スパイス（対照的）用**: {cont_source['snippet'] if cont_source else "情報なし"}"""
+    main_prompt = f"""
+    書籍または記事『{book_title}』に関する以下の情報を元に、BookCocktailを生成し、JSON形式で出力してください。
+
+    # 主要な情報
+    - **要約**: {summary_text}
+
+    # 補足情報
+    - **ベース（相補的）用スニペット**: {comp_source['snippet'] if comp_source else "なし"}
+    - **スパイス（対照的）用スニペット**: {cont_source['snippet'] if cont_source else "なし"}
+
+    # 指示
+    1.  **summary**: 「主要な情報」を元に、自然で完成された3〜4文の要約に書き直してください。
+    2.  **complementary_commentary**: 「ベース」のスニペットが「なし」でなければ、それが主要な情報とどう関連するか1〜2文で解説してください。「なし」の場合は「関連情報は見つかりませんでした。」と記述してください。
+    3.  **contrasting_commentary**: 「スパイス」のスニペットが「なし」でなければ、それが主要な情報とどう関連するか1〜2文で解説してください。「なし」の場合は「関連情報は見つかりませんでした。」と記述してください。
+    4.  **tangent_theme**: 「主要な情報」から、本質を突くような「隠し味」となる意外なテーマを一つ考案してください。（例：「経営者の自叙伝」に対する「サイコパスの特性」）
+    5.  **twist**: 全体を締めくくる、気の利いた「最後の一ひねり」を生成してください。
+    """
     
     gemini_result = call_gemini(main_prompt, expect_json=True)
 
     if not gemini_result:
         return {"error": "Failed to generate cocktail data from Gemini."}
 
+    # Step 4: Final assembly.
     tangent_theme = gemini_result.get("tangent_theme", "")
     tangent_source = None
     if tangent_theme:
-        tangent_query = f'"{book_title}" {tangent_theme}' # This query is now always valid
+        tangent_query = f'"{book_title}" {tangent_theme}'
         tangent_source = google_search(tangent_query)
         if tangent_source:
              tangent_source['commentary'] = f"テーマ「{tangent_theme}」に関して新たな視点を提供します。"
