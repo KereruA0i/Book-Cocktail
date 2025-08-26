@@ -16,7 +16,6 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 def format_for_discord(data):
-    # Use the title returned from the API
     title_text = f"## 🍸 『{data.get('book_title', '無題の作品')}』のカクテル"
     summary_text = f"### ■作品の要約\n{data.get('summary', '情報が見つかりませんでした。')}"
     parts = [title_text, summary_text]
@@ -44,11 +43,12 @@ async def on_ready():
     print("Slash commands synced.")
 
 @tree.command(name="cocktail", description="書籍のタイトルまたはURLから思考のカクテルを提供します。")
+# --- [ここを修正] ---
+# @app.describe を @app_commands.describe に変更しました。
 @app_commands.describe(query="書籍のタイトルまたはURL")
 async def cocktail(interaction: discord.Interaction, query: str):
     await interaction.response.defer(thinking=True)
     try:
-        # The key in the JSON payload is 'user_input'
         response = requests.post(API_SERVER_URL, json={'user_input': query}, timeout=120)
         response.raise_for_status()
         cocktail_data = response.json()
