@@ -3,15 +3,17 @@
 // DOM要素が読み込まれたら実行
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('cocktail-form');
-    const input = document.getElementById('book-title-input');
+    // --- [ここを修正] ---
+    // HTMLのIDに合わせて 'user-input' に変更しました。
+    const input = document.getElementById('user-input');
     const loadingDiv = document.getElementById('loading');
     const resultContainer = document.getElementById('result-container');
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault(); // フォームのデフォルト送信をキャンセル
 
-        const bookTitle = input.value;
-        if (!bookTitle) return;
+        const userInput = input.value;
+        if (!userInput) return;
 
         // ローディング表示を開始
         loadingDiv.classList.remove('hidden');
@@ -23,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ user_input: bookTitle }),
+                // 送信するキーも 'user_input' に統一
+                body: JSON.stringify({ user_input: userInput }),
             });
 
             if (!response.ok) {
