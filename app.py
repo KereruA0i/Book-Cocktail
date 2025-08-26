@@ -47,7 +47,7 @@ def call_gemini(prompt, schema=None):
     if not GEMINI_API_KEY: return None
     try:
         config = {}
-        model_name = 'gemini-1.5-flash'
+        model_name = 'gemini-2.5-flash'
         if schema:
             config = {"response_mime_type": "application/json"}
         
