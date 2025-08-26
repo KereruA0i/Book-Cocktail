@@ -1,6 +1,6 @@
-# app.py (Stable Unified Version with Professional URL Reader)
-# This version uses a third-party service (Jina AI Reader) to robustly
-# handle URLs, avoiding blocks from sites like Amazon.
+# app.py (Stable Unified Version with Corrected URL Handling)
+# This version fixes the critical bug that caused invalid search queries
+# by properly separating the URL summarization and cocktail generation steps.
 
 import os
 import random
@@ -38,55 +38,31 @@ def google_search(query, num=1):
         print(f"An error occurred during Google Search: {e}")
         return None
 
-def call_gemini_for_cocktail(book_title, summary_snippet, comp_snippet, cont_snippet):
-    print("🧠 Calling Gemini API for the entire cocktail...")
+def call_gemini(prompt, expect_json=False):
+    """A versatile function to call the Gemini API."""
+    print("🧠 Calling Gemini API...")
     if not GEMINI_API_KEY: return None
-
-    json_schema = {
-        "type": "object",
-        "properties": {
-            "summary": {"type": "string", "description": "書籍や記事の核心的なテーマやあらすじを3〜4文でまとめた要約。"},
-            "complementary_commentary": {"type": "string", "description": "相補的な情報源（論文など）がどう関連するかの1〜2文の解説。"},
-            "contrasting_commentary": {"type": "string", "description": "対照的な情報源（批判など）がどう関連するかの1〜2文の解説。"},
-            "tangent_theme": {"type": "string", "description": "内容に対する意外な接線的テーマ（例：「経営者の自叙伝」に対する「サイコパスの特性」）。テーマ名のみを簡潔に返すこと。"},
-            "twist": {"type": "string", "description": "内容のテーマを踏まえ、皮肉で知的な一言。"}
-        },
-        "required": ["summary", "complementary_commentary", "contrasting_commentary", "tangent_theme", "twist"]
-    }
-
-    prompt = f"""
-    書籍または記事『{book_title}』に関する以下の情報を元に、BookCocktailを生成してください。
-
-    # 情報源
-    - **要約用**: {summary_snippet}
-    - **ベース（相補的）用**: {comp_snippet}
-    - **スパイス（対照的）用**: {cont_snippet}
-
-    # 指示
-    提供された情報とタイトルから、以下の項目を考察し、指定されたJSON形式で出力してください。
-    """
-
     try:
-        model = genai.GenerativeModel(
-            'gemini-1.5-flash',
-            generation_config={"response_mime_type": "application/json", "response_schema": json_schema}
-        )
+        config = {}
+        model_name = 'gemini-1.5-flash' # Use flash for speed and generous limits
+        if expect_json:
+            config = {"response_mime_type": "application/json"}
+        
+        model = genai.GenerativeModel(model_name, generation_config=config)
         response = model.generate_content(prompt)
-        return json.loads(response.text)
+        
+        return json.loads(response.text) if expect_json else response.text
     except Exception as e:
         print(f"❌ An error occurred during Gemini API call: {e}")
         return None
 
-# --- [新規] Professional URL Reader Function ---
 def read_url_content(url):
     """Uses Jina AI Reader to reliably get content from any URL."""
     print(f"🔗 Reading URL with professional tool: {url}")
     try:
-        # Prepend the Jina AI Reader URL
         reader_url = f"https://r.jina.ai/{url}"
         response = requests.get(reader_url, timeout=60)
         response.raise_for_status()
-        # The response is clean text, perfect for summarization
         return response.text
     except requests.RequestException as e:
         print(f"❌ Professional reader failed: {e}")
@@ -97,43 +73,46 @@ def generate_cocktail_data(user_input):
     summary_text = ""
     is_url = user_input.strip().startswith('http')
 
+    # --- [最重要改善点] ---
     if is_url:
-        # Try the professional reader first
         content = read_url_content(user_input)
-        if content:
-            # If successful, ask Gemini to get the title and summary from the content
-            prompt = f"以下のテキストから、この記事の適切なタイトルと、内容の核心を突く3〜4文の要約を生成してください。テキスト: {content[:15000]}"
-            # We don't need a strict JSON response here, just the text
-            summary_response = call_gemini_for_cocktail(user_input, content, "", "")
-            if summary_response:
-                book_title = summary_response.get("summary").splitlines()[0] # Heuristic to get a title
-                summary_text = summary_response.get("summary")
-            else:
-                 return {"error": "URLの内容から要約を生成できませんでした。"}
-        else:
-            # Fallback to Google Search if the professional reader fails
-            print("↪️ Falling back to Google Search for URL.")
-            url_summary_source = google_search(f'"{user_input}" 要約 OR 解説 OR レビュー')
-            if not url_summary_source:
-                return {"error": "入力されたURLに関する要約やレビューが見つかりませんでした。"}
-            book_title = url_summary_source.get("title", "無題の記事")
-            summary_text = url_summary_source.get("snippet", "")
+        if not content:
+            return {"error": "URLの内容を読み取れませんでした。"}
+        
+        # Step 1: Get a clean title and summary from the URL content first.
+        summarization_prompt = f"以下のテキストから、この記事の適切なタイトルと、内容の核心を突く3〜4文の要約を生成してください。タイトルと要約だけを返してください。例:\nタイトル: 宇宙での妊娠のリスク\n要約: この記事は...\n\nテキスト: {content[:15000]}"
+        initial_summary = call_gemini(summarization_prompt)
+        
+        if not initial_summary:
+            return {"error": "URLの内容から要約を生成できませんでした。"}
+        
+        # Extract the title and summary cleanly
+        lines = initial_summary.splitlines()
+        book_title = lines[0].replace("タイトル:", "").strip() if lines else "無題の記事"
+        summary_text = "\n".join(lines[1:]).replace("要約:", "").strip()
     else:
-        # For titles, use the standard method
+        # For titles, get a summary snippet from Google Search
         summary_source = google_search(f'"{book_title}" 要約 OR あらすじ')
         if summary_source:
             summary_text = summary_source['snippet']
 
-    # --- The rest of the logic is common for both inputs ---
+    # --- The rest of the logic now uses a clean `book_title` ---
     comp_source = google_search(f'"{book_title}" 論文 OR 学術的考察')
     cont_source = google_search(f'"{book_title}" 批判 OR 問題点')
 
-    gemini_result = call_gemini_for_cocktail(
-        book_title,
-        summary_text,
-        comp_source['snippet'] if comp_source else "情報なし",
-        cont_source['snippet'] if cont_source else "情報なし"
-    )
+    # Now, call Gemini for the main cocktail generation
+    cocktail_schema = {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string"}, "complementary_commentary": {"type": "string"},
+            "contrasting_commentary": {"type": "string"}, "tangent_theme": {"type": "string"},
+            "twist": {"type": "string"}
+        }, "required": ["summary", "complementary_commentary", "contrasting_commentary", "tangent_theme", "twist"]
+    }
+    
+    main_prompt = f"""書籍または記事『{book_title}』に関する以下の情報を元に、BookCocktailを生成し、JSON形式で出力してください。# 情報源- **要約用**: {summary_text}- **ベース（相補的）用**: {comp_source['snippet'] if comp_source else "情報なし"}- **スパイス（対照的）用**: {cont_source['snippet'] if cont_source else "情報なし"}"""
+    
+    gemini_result = call_gemini(main_prompt, expect_json=True)
 
     if not gemini_result:
         return {"error": "Failed to generate cocktail data from Gemini."}
@@ -141,7 +120,7 @@ def generate_cocktail_data(user_input):
     tangent_theme = gemini_result.get("tangent_theme", "")
     tangent_source = None
     if tangent_theme:
-        tangent_query = f'"{book_title}" {tangent_theme}'
+        tangent_query = f'"{book_title}" {tangent_theme}' # This query is now always valid
         tangent_source = google_search(tangent_query)
         if tangent_source:
              tangent_source['commentary'] = f"テーマ「{tangent_theme}」に関して新たな視点を提供します。"
