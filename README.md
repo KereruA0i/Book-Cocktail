@@ -2,32 +2,40 @@
 
 書籍のタイトルを入力すると、その本に関する「相補的な一杯」「対照的な一杯」「意外な一杯」を提案してくれるインテリジェントなアプリケーションです。このプロジェクトは、Webアプリ版とDiscordボット版の両方を提供します。
 
-## 🏛️ プロジェクト構成
+---
 
-このプロジェクトは、役割ごとに3つの主要なファイルに分割されています。
+## 📂 フォルダ構成 (Project Structure)
 
-1.  **`api_server.py` (頭脳 🧠)**
-    * BookCocktailを生成する全てのロジック（Google検索、Geminiによる文章生成）を担当するAPIサーバーです。WebアプリとDiscordボットの両方が、このサーバーを呼び出して結果を得ます。
+このプロジェクトは、役割ごとにファイルとフォルダが整理されています。
 
-2.  **`webapp.py` (Webアプリ受付 🌐)**
-    * ブラウザでアクセスできるユーザーインターフェースを提供します。ユーザーからのリクエストを受け取り、`api_server.py`に問い合わせて結果を表示します。
+* **`app.py` (心臓部 ❤️)**
+    * WebアプリとDiscordボットの両方に対応する、プロジェクトの頭脳です。Google検索、Geminiによる文章生成、Webページの表示など、すべてのロジックがこのファイルに集約されています。
 
-3.  **`discord_bot.py` (Discordボト受付 🤖)**
-    * Discord上でのスラッシュコマンドを待ち受けます。コマンドが実行されると、`api_server.py`に問い合わせて結果をDiscordに投稿します。
+* **`discord_bot.py` (Discord受付 🤖)**
+    * Discordからの`/cocktail`コマンドを待ち受ける専門のファイルです。コマンドを受け取ると、`app.py`に問い合わせて結果をDiscordに投稿します。
+
+* **`templates/` フォルダ**
+    * WebページのHTMLファイル（骨格）を格納します。
+    * **`index.html`**: Webアプリのメインページです。
+
+* **`static/` フォルダ**
+    * Webページのデザインや動きを制御するファイルを格納します。
+    * **`style.css`**: ページの見た目（色、レイアウトなど）を定義します。
+    * **`script.js`**: ボタンが押されたときの通信など、ページの動的な機能を担当します。
 
 ---
 
-## ⚙️ セットアップガイド
+## ⚙️ セットアップガイド (Installation & Setup)
 
 ### ステップ1: プロジェクトの準備
 
-1.  **リポジトリをクローン:**
+1.  **リポジトリをクローン (ダウンロード):**
     ```bash
     git clone [https://github.com/KereruA0i/Book-Cocktail.git](https://github.com/KereruA0i/Book-Cocktail.git)
     cd Book-Cocktail
     ```
 
-2.  **`.env`ファイルの設定:**
+2.  **`.env`ファイルの設定 (APIキー):**
     プロジェクトのルートに`.env`ファイルを作成し、4種類のAPIキーをすべて設定してください。
     ```
     # .env ファイル
@@ -57,28 +65,23 @@
 
 ## 🚀 ローカルでの実行方法
 
-`api_server.py`は、WebアプリとDiscordボットの両方にとって必須です。
+#### 1. サーバーを起動
 
-#### 1. APIサーバーを起動 (必須)
+まず、ターミナルで以下のコマンドを実行して、心臓部である`app.py`を起動します。
 
-まず、ターミナルで以下のコマンドを実行して、頭脳となるAPIサーバーを起動します。
 ```bash
 # ターミナル 1
-python api_server.py
+python app.py
 ```
+これで、Webアプリと、Discordボットが接続するためのAPIの両方が起動します。
 
-#### 2. Webアプリ または Discordボットを起動
+#### 2. Webアプリ または Discordボットを試す
 
-**別の**ターミナルを開き、使いたい方の受付を起動します。
+* **Webアプリ版を試す場合:**
+    ブラウザで `http://127.0.0.1:5000` にアクセスしてください。
 
-* **Webアプリ版を使いたい場合:**
-    ```bash
-    # ターミナル 2
-    python webapp.py
-    ```
-    その後、ブラウザで `http://127.0.0.1:5000` にアクセスしてください。
-
-* **Discordボット版を使いたい場合:**
+* **Discordボット版を試す場合:**
+    **別の**ターミナルを開き、`discord_bot.py`を起動します。
     ```bash
     # ターミナル 2
     python discord_bot.py
@@ -86,29 +89,29 @@ python api_server.py
 
 ---
 
-## ☁️ Webアプリ版のRenderデプロイガイド
+## ☁️ RenderでのWebアプリ公開ガイド
 
-このセクションでは、**Webアプリ版**をインターネットに公開する手順を説明します。これには、APIサーバーとWebアプリの2つをRenderにデプロイする必要があります。
-
-### Part 1: APIサーバーのデプロイ
+このセクションでは、**Webアプリ版**をインターネットに公開する手順を説明します。**サービスは1つだけ**で完了します。
 
 1.  **Renderで新しいWebサービスを作成**し、GitHubリポジトリに接続します。
 2.  **サービス詳細設定:**
-    * **Name**: `book-cocktail-api` など、APIサーバーだと分かる名前をつけます。
-    * **Start Command**: `gunicorn api_server:app`
+    * **Name**: `book-cocktail` など、お好きな名前をつけます。
+    * **Start Command**: `gunicorn app:app`
     * その他（Region, Branch, Build Command, Instance Type）は通常通り設定します。
 3.  **環境変数を設定:** `GOOGLE_API_KEY`, `SEARCH_ENGINE_ID`, `GEMINI_API_KEY` の3つを設定します。
-4.  **デプロイを開始**し、成功したら公開URL（例: `https://book-cocktail-api.onrender.com`）をコピーしておきます。
-
-### Part 2: Webアプリのデプロイ
-
-1.  **Renderで"もう一つ"新しいWebサービスを作成**し、同じGitHubリポジトリに接続します。
-2.  **サービス詳細設定:**
-    * **Name**: `book-cocktail-webapp` など、Webアプリだと分かる名前をつけます。
-    * **Start Command**: `gunicorn webapp:app`
-3.  **環境変数を設定:**
-    * **`API_SERVER_URL`** という名前で新しい環境変数を追加します。
-    * **Value**には、Part 1でコピーした**APIサーバーの公開URL**の末尾に`/generate-cocktail`を付け加えたものを貼り付けます。（例: `https://book-cocktail-api.onrender.com/generate-cocktail`）
 4.  **デプロイを開始**します。
 
-すべて成功すると、Webアプリの公開URLにアクセスして、世界中のどこからでもBookCocktailが利用できるようになります！
+すべて成功すると、公開URLにアクセスして、世界中のどこからでもBookCocktailが利用できるようになります！
+
+### ✨ おまけ: Discordボットを公開Webアプリと連携させる
+
+ローカルで動かす`discord_bot.py`に、Renderで公開したサーバーの住所を教えることで、PCを落としてもDiscordボットが機能するようにできます。
+
+`discord_bot.py`の以下の行を書き換えてください。
+
+```python
+# 変更前
+# API_SERVER_URL = "[http://127.0.0.1:5000/api/cocktail](http://127.0.0.1:5000/api/cocktail)"
+
+# 変更後
+API_SERVER_URL = "[https://your-app-name.onrender.com/api/cocktail](https://your-app-name.onrender.com/api/cocktail)"
