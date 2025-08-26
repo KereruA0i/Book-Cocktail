@@ -1,15 +1,16 @@
-# api_server.py
-# This is the central brain of the BookCocktail project.
-# It handles all logic for searching sources and generating text with Gemini.
+# This single file contains all logic for a stable deployment.
+# It serves the HTML web interface, a JSON API for the web interface, and a JSON API for the Discord bot.
 
 import os
 import random
 import google.generativeai as genai
-from flask import Flask, request, jsonify
+from flask import Flask, request, render_template, jsonify
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 
+# Load .env for local development
 load_dotenv()
+
 app = Flask(__name__)
 
 # --- API Configuration ---
@@ -20,7 +21,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# --- Core Functions ---
+# --- Core Logic ---
 
 def google_search(query, num=1):
     print(f"🔎 Searching for: '{query}'")
@@ -80,15 +81,41 @@ def generate_cocktail_data(book_title):
         "tangent": cocktail_sources["tangent"], "twist": twist_text
     }
 
-@app.route('/generate-cocktail', methods=['POST'])
-def create_cocktail_endpoint():
+# --- Web Interface Route ---
+@app.route('/')
+def home():
+    # This route now ONLY serves the initial HTML page.
+    return render_template('index.html')
+
+# --- [新規] Web App API Route ---
+@app.route('/generate-for-web', methods=['POST'])
+def generate_for_web():
     data = request.get_json()
-    book_title = data.get('book_title')
-    if not book_title:
-        return jsonify({"error": "Book title is required"}), 400
+    if not data or 'book_title' not in data:
+        return jsonify({"error": "book_title is required"}), 400
     
-    cocktail_data = generate_cocktail_data(book_title)
-    return jsonify(cocktail_data)
+    book_title = data['book_title']
+    try:
+        cocktail_data = generate_cocktail_data(book_title)
+        return jsonify(cocktail_data)
+    except Exception as e:
+        print(f"Error generating cocktail data for web: {e}")
+        return jsonify({"error": "カクテルの生成中にエラーが発生しました。"}), 500
+
+# --- Discord Bot API Route (No changes) ---
+@app.route('/api/cocktail', methods=['POST'])
+def api_for_bot():
+    data = request.get_json()
+    if not data or 'book_title' not in data:
+        return jsonify({"error": "book_title is required"}), 400
+    
+    book_title = data['book_title']
+    try:
+        cocktail_data = generate_cocktail_data(book_title)
+        return jsonify(cocktail_data)
+    except Exception as e:
+        print(f"Error in API endpoint: {e}")
+        return jsonify({"error": "Failed to generate cocktail data"}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True) # Use a different port like 5001
+    app.run(host='0.0.0.0', port=5000, debug=True)

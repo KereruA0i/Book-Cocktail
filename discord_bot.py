@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-API_SERVER_URL = "http://127.0.0.1:5001/generate-cocktail"
+API_SERVER_URL = "https://book-cocktail.onrender.com/api/cocktail"
 
 # Setup Bot client
 intents = discord.Intents.default()
