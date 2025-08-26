@@ -1,10 +1,11 @@
-# app.py (Stable Unified Version with Robust URL Handling)
-# This version supports both titles and URLs, fixes the invalid query bug,
-# and uses a stable method for handling URLs.
+# app.py (Stable Unified Version with Professional URL Reader)
+# This version uses a third-party service (Jina AI Reader) to robustly
+# handle URLs, avoiding blocks from sites like Amazon.
 
 import os
 import random
 import json
+import requests
 import google.generativeai as genai
 from flask import Flask, request, render_template, jsonify
 from dotenv import load_dotenv
@@ -67,7 +68,7 @@ def call_gemini_for_cocktail(book_title, summary_snippet, comp_snippet, cont_sni
 
     try:
         model = genai.GenerativeModel(
-            'gemini-2.5-flash',
+            'gemini-1.5-flash',
             generation_config={"response_mime_type": "application/json", "response_schema": json_schema}
         )
         response = model.generate_content(prompt)
@@ -76,23 +77,54 @@ def call_gemini_for_cocktail(book_title, summary_snippet, comp_snippet, cont_sni
         print(f"❌ An error occurred during Gemini API call: {e}")
         return None
 
+# --- [新規] Professional URL Reader Function ---
+def read_url_content(url):
+    """Uses Jina AI Reader to reliably get content from any URL."""
+    print(f"🔗 Reading URL with professional tool: {url}")
+    try:
+        # Prepend the Jina AI Reader URL
+        reader_url = f"https://r.jina.ai/{url}"
+        response = requests.get(reader_url, timeout=60)
+        response.raise_for_status()
+        # The response is clean text, perfect for summarization
+        return response.text
+    except requests.RequestException as e:
+        print(f"❌ Professional reader failed: {e}")
+        return None
+
 def generate_cocktail_data(user_input):
     book_title = user_input
     summary_text = ""
     is_url = user_input.strip().startswith('http')
 
     if is_url:
-        print(f"🔗 URL detected. Searching for content about: {user_input}")
-        url_summary_source = google_search(f'"{user_input}" 要約 OR 解説 OR レビュー')
-        if not url_summary_source:
-            return {"error": "入力されたURLに関する要約やレビューが見つかりませんでした。"}
-        book_title = url_summary_source.get("title", "無題の記事")
-        summary_text = url_summary_source.get("snippet", "")
+        # Try the professional reader first
+        content = read_url_content(user_input)
+        if content:
+            # If successful, ask Gemini to get the title and summary from the content
+            prompt = f"以下のテキストから、この記事の適切なタイトルと、内容の核心を突く3〜4文の要約を生成してください。テキスト: {content[:15000]}"
+            # We don't need a strict JSON response here, just the text
+            summary_response = call_gemini_for_cocktail(user_input, content, "", "")
+            if summary_response:
+                book_title = summary_response.get("summary").splitlines()[0] # Heuristic to get a title
+                summary_text = summary_response.get("summary")
+            else:
+                 return {"error": "URLの内容から要約を生成できませんでした。"}
+        else:
+            # Fallback to Google Search if the professional reader fails
+            print("↪️ Falling back to Google Search for URL.")
+            url_summary_source = google_search(f'"{user_input}" 要約 OR 解説 OR レビュー')
+            if not url_summary_source:
+                return {"error": "入力されたURLに関する要約やレビューが見つかりませんでした。"}
+            book_title = url_summary_source.get("title", "無題の記事")
+            summary_text = url_summary_source.get("snippet", "")
     else:
+        # For titles, use the standard method
         summary_source = google_search(f'"{book_title}" 要約 OR あらすじ')
         if summary_source:
             summary_text = summary_source['snippet']
 
+    # --- The rest of the logic is common for both inputs ---
     comp_source = google_search(f'"{book_title}" 論文 OR 学術的考察')
     cont_source = google_search(f'"{book_title}" 批判 OR 問題点')
 
@@ -128,7 +160,7 @@ def generate_cocktail_data(user_input):
         "twist": gemini_result.get("twist")
     }
 
-# --- Web Interface and API Routes ---
+# --- Web Interface and API Routes (No changes) ---
 @app.route('/')
 def home():
     return render_template('index.html')
