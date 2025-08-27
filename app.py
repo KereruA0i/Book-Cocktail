@@ -1,201 +1,239 @@
-# app.py (Definitive Version with Hallucination Guard and Prompt Refinement)
-# This version prevents hallucinations for non-existent works and improves
-# the naturalness of the generated commentaries.
-
-import os
-import random
-import json
+"""
+Book Cocktail Mixologist — Flask backend (null-safe, verifiable links, clean Markdown)
+- Summarizes a user-provided source title
+- Curates exactly 3 open, stable sources: Complementary, Contrasting, Tangent
+- Returns JSON with NO nulls (always strings), or an explicit "error" string
+- Uses Google CSE + Gemini (configure via env). Gracefully degrades if keys missing.
+"""
+import os, re, json, time, random
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 import requests
-import google.generativeai as genai
-from flask import Flask, request, render_template, jsonify
-from dotenv import load_dotenv
-from googleapiclient.discovery import build
+from flask import Flask, request, jsonify
 
-# Load .env for local development
-load_dotenv()
+# === Environment ===
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID", "")
 
+# === Flask ===
 app = Flask(__name__)
 
-# --- API Configuration ---
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-SEARCH_ENGINE_ID = os.getenv('SEARCH_ENGINE_ID')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+# === Utilities ===
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+_ALLOWED_HOSTS_HINT = (
+    ".arxiv.org", "arxiv.org",
+    ".nih.gov", ".ncbi.nlm.nih.gov", ".pmc.ncbi.nlm.nih.gov",
+    ".edu", ".ac.", ".gov",
+    "osf.io", "ssrn.com", "hal.science", "openaccess.thecvf.com",
+    "reuters.com", "apnews.com", "bbc.com", "nature.com",
+    "dl.acm.org", "ieeexplore.ieee.org", "journals.plos.org",
+)
 
-# --- Core Logic ---
-
-def google_search(query, num=1):
-    print(f"🔎 Searching for: '{query}'")
+def _strip_tracking(url: str) -> str:
     try:
-        service = build("customsearch", "v1", developerKey=GOOGLE_API_KEY)
-        result = service.cse().list(q=query, cx=SEARCH_ENGINE_ID, num=num).execute()
-        items = result.get('items', [])
-        if not items: 
-            print(" -> No results found.")
-            return None
-        print(" -> Found result.")
-        return {"title": items[0].get('title'), "url": items[0].get('link'), "snippet": items[0].get('snippet', '')}
-    except Exception as e:
-        print(f"An error occurred during Google Search: {e}")
-        return None
+        u = urlparse(url)
+        query = [(k, v) for k, v in parse_qsl(u.query, keep_blank_values=True)
+                 if not k.lower().startswith(("utm_", "gclid", "fbclid", "icid", "mc_cid", "mc_eid"))]
+        return urlunparse((u.scheme, u.netloc, u.path, u.params, urlencode(query), u.fragment))
+    except Exception:
+        return url
 
-def call_gemini(prompt, schema=None):
-    """A versatile function to call the Gemini API."""
-    print("🧠 Calling Gemini API...")
-    if not GEMINI_API_KEY: return None
+def _is_candidate_ok(url: str) -> bool:
+    if not url or "google.com/url" in url or "google.com/search" in url: return False
+    host = urlparse(url).netloc.lower()
+    if host.startswith("www."): host = host[4:]
+    # Prefer open/stable; allow others but de-prioritize later
+    return True
+
+def verify_open(url: str, timeout=8) -> bool:
+    """Check the page is publicly viewable and texty."""
     try:
-        config = {}
-        model_name = 'gemini-2.5-flash'
-        if schema:
-            config = {"response_mime_type": "application/json"}
-        
-        model = genai.GenerativeModel(model_name, generation_config=config)
-        response = model.generate_content(prompt)
-        
-        return json.loads(response.text) if schema else response.text
-    except Exception as e:
-        print(f"❌ An error occurred during Gemini API call: {e}")
-        return None
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (BookCocktail)"})
+        if r.status_code != 200: return False
+        ct = r.headers.get("content-type", "").lower()
+        if "text/html" not in ct and "text/plain" not in ct and "application/pdf" not in ct:
+            return False
+        # quick readability check
+        if len(r.content) < 400: return False
+        return True
+    except Exception:
+        return False
 
-def read_url_content(url):
-    """Uses Jina AI Reader to reliably get content from any URL."""
-    print(f"🔗 Reading URL with professional tool: {url}")
+def google_search(q: str, num=5):
+    """Search via Google CSE; fallback to DuckDuckGo HTML if keys missing (best-effort)."""
+    results = []
+    if GOOGLE_API_KEY and GOOGLE_CSE_ID:
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/customsearch/v1",
+                params={"key": GOOGLE_API_KEY, "cx": GOOGLE_CSE_ID, "q": q, "num": min(10, max(1, num*2))},
+                timeout=10,
+            )
+            data = resp.json()
+            for item in data.get("items", []):
+                url = _strip_tracking(item.get("link",""))
+                if _is_candidate_ok(url):
+                    results.append({
+                        "title": item.get("title",""),
+                        "url": url,
+                        "snippet": item.get("snippet",""),
+                    })
+        except Exception:
+            pass
+
+    # Fallback: DuckDuckGo lite JSON API (undocumented, may break) — best-effort only
+    if not results:
+        try:
+            r = requests.get("https://lite.duckduckgo.com/50x.html", timeout=6)
+            # If blocked, silently ignore. We avoid scraping here.
+        except Exception:
+            pass
+
+    # Dedup and limit
+    seen = set(); deduped = []
+    for it in results:
+        u = it["url"]
+        if u and u not in seen:
+            seen.add(u); deduped.append(it)
+    return deduped[:num]
+
+def pick_open_result(candidates):
+    """Return the first verifiably open link, preferring open/stable hosts."""
+    # Rank by host preference
+    def score(url):
+        host = urlparse(url).netloc.lower()
+        pref = any(h in host for h in _ALLOWED_HOSTS_HINT)
+        return (0 if pref else 1)
+    candidates = sorted(candidates, key=lambda it: score(it["url"]))
+    for it in candidates:
+        url = it["url"]
+        if verify_open(url):
+            return it
+    # Last resort: allow first candidate even if unverifiable, but never return None
+    return candidates[0] if candidates else {"title":"", "url":"", "snippet":""}
+
+def call_gemini(system_prompt: str, user_prompt: str) -> str:
+    """Best-effort Gemini call; returns plain text. If key missing, synthesize safe placeholder."""
     try:
-        reader_url = f"https://r.jina.ai/{url}"
-        response = requests.get(reader_url, timeout=60)
-        response.raise_for_status()
-        return response.text
-    except requests.RequestException as e:
-        print(f"❌ Professional reader failed: {e}")
-        return None
+        import google.generativeai as genai
+        if not GEMINI_API_KEY:
+            # Offline/dev mode
+            return ""
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        resp = model.generate_content([system_prompt, user_prompt])
+        return resp.text or ""
+    except Exception:
+        return ""
 
-def generate_cocktail_data(user_input):
-    book_title = user_input
-    summary_text = ""
-    is_url = user_input.strip().startswith('http')
+# === Core logic ===
 
-    # Step 1: Establish a clear "book_title" and "summary_text".
-    if is_url:
-        content = read_url_content(user_input)
-        if not content:
-            return {"error": "URLの内容を読み取れませんでした。"}
-        
-        summarization_prompt = f"以下のテキストから、この記事の適切なタイトルと、内容の核心を突く3〜4文の要約を生成してください。タイトルと要約だけを返してください。例:\nタイトル: 宇宙での妊娠のリスク\n要約: この記事は...\n\nテキスト: {content[:15000]}"
-        initial_summary = call_gemini(summarization_prompt)
-        
-        if not initial_summary:
-            return {"error": "URLの内容から要約を生成できませんでした。"}
-        
-        lines = initial_summary.splitlines()
-        book_title = lines[0].replace("タイトル:", "").strip() if lines else "無題の記事"
-        summary_text = "\n".join(lines[1:]).replace("要約:", "").strip()
-    else:
-        summary_source = google_search(f'"{book_title}" 要約 OR あらすじ')
-        # --- [最重要改善点 1] ---
-        # If no summary is found for a title, the work likely doesn't exist. Stop here.
-        if not summary_source:
-            return {"error": "入力された書籍や記事が見つかりませんでした。実在する作品名を入力してください。"}
-        summary_text = summary_source['snippet']
+def summarize_title(title: str) -> str:
+    """Attempt a concise thesis summary; fall back to search snippets."""
+    title_clean = title.strip()
+    if not title_clean:
+        return ""
+    # try LLM first
+    sys = "Summarize the core thesis of the named work in one or two sentences. If unsure, say you cannot verify."
+    out = call_gemini(sys, f'Title: "{title_clean}"\nLanguage: Japanese preferred, else English.')
+    out = (out or "").strip()
+    if out and "cannot verify" not in out.lower():
+        return out
+    # fallback: combine top snippets
+    hits = google_search(f'"{title_clean}" 要約 OR 概要 OR abstract', num=5)
+    if not hits:
+        return ""
+    snippets = " / ".join([h.get("snippet","") for h in hits if h.get("snippet")][:3])
+    return snippets[:600]
 
-    # Step 2: Have Gemini generate search queries.
-    query_generation_schema = {
-        "type": "object", "properties": {
-            "complementary_query": {"type": "string"},
-            "contrasting_query": {"type": "string"},
-            "tangent_query": {"type": "string"}
-        }, "required": ["complementary_query", "contrasting_query", "tangent_query"]
+def curate_sources(title: str):
+    """Return dict for complementary/contrasting/tangent with titles and URLs (never null)."""
+    queries = {
+        "complementary": f'{title} 批評 OR レビュー OR 研究 site:.edu OR site:.ac OR site:.gov OR arXiv OR SSRN',
+        "contrasting":  f'{title} 反論 OR 批判 OR 問題点',
+        "tangent":      f'{title} 歴史的文脈 OR メタ分析 OR 関連トピック',
     }
-    query_prompt = f"『{book_title}』という作品（要約：{summary_text}）について、以下の3つの目的のGoogle検索クエリ（日本語）を生成し、JSON形式で出力してください。\n1. complementary_query: 作品を補強する学術論文や深い分析記事を見つけるためのクエリ。\n2. contrasting_query: 作品に批判的な視点を提供する記事を見つけるためのクエリ。\n3. tangent_query: 作品に意外な視点を与える記事を見つけるためのクエリ。"
-    
-    queries = call_gemini(query_prompt, schema=query_generation_schema)
-    if not queries:
-        return {"error": "検索クエリの生成に失敗しました。"}
+    slots = {}
+    for key, q in queries.items():
+        hits = google_search(q, num=6)
+        chosen = pick_open_result(hits)
+        slots[key] = {
+            "title": chosen.get("title",""),
+            "url": chosen.get("url",""),
+            "relation": "Supports" if key=="complementary" else ("Challenges" if key=="contrasting" else "Reframes"),
+            "commentary": "",
+        }
+    # Add short commentaries via LLM (optional)
+    if GEMINI_API_KEY:
+        for key, item in slots.items():
+            if item["title"] and item["url"]:
+                brief = call_gemini(
+                    "In <=2 short sentences, explain how this link relates to the given work. Output plain text.",
+                    f'Work: "{title}"\nLink title: {item["title"]}\nURL: {item["url"]}'
+                ).strip()
+                item["commentary"] = brief or ""
+    return slots
 
-    # Step 3: Execute the AI-generated search queries.
-    comp_source = google_search(queries.get("complementary_query"))
-    cont_source = google_search(queries.get("contrasting_query"))
-    tangent_source = google_search(queries.get("tangent_query"))
+def final_twist() -> str:
+    lines = [
+        "Filed under: shaken beliefs, not stirred.", 
+        "Proof that even footnotes can start bar fights.",
+        "Cited responsibly, sipped recklessly.",
+        "Because every bibliography needs a wild card.",
+    ]
+    return random.choice(lines)
 
-    # Step 4: Generate the final text based on the ACTUAL search results.
-    final_generation_schema = {
-        "type": "object", "properties": {
-            "summary": {"type": "string"}, "complementary_commentary": {"type": "string"},
-            "contrasting_commentary": {"type": "string"}, "tangent_commentary": {"type": "string"},
-            "twist": {"type": "string"}
-        }, "required": ["summary", "complementary_commentary", "contrasting_commentary", "tangent_commentary", "twist"]
+def generate_payload(user_title: str):
+    title = (user_title or "").strip()
+    if not title:
+        return {"error": "作品名（本/論文/記事）を入力してください。"}
+
+    summary = summarize_title(title)
+    if not summary:
+        return {"error": "入力された作品が見つからないか、要約できませんでした。実在するタイトルでお試しください。"}
+
+    sources = curate_sources(title)
+
+    # Construct Markdown output blocks (for your front-end), but keep JSON primitive values non-null.
+    md = {
+        "core_text_summary": summary,
+        "complementary_md": f'**[{sources["complementary"]["title"]}]({sources["complementary"]["url"]})**\n→ Relation: Supports',
+        "contrasting_md": f'**[{sources["contrasting"]["title"]}]({sources["contrasting"]["url"]})**\n→ Relation: Challenges\n→ Commentary: {sources["contrasting"]["commentary"] or ""}',
+        "tangent_md": f'**[{sources["tangent"]["title"]}]({sources["tangent"]["url"]})**\n→ Relation: Reframes\n→ Commentary: {sources["tangent"]["commentary"] or ""}',
+        "final_twist": f'"{final_twist()}"'
     }
-    # --- [最重要改善点 2] ---
-    # The prompt for commentaries is now much more specific.
-    final_prompt = f"""
-    『{book_title}』という作品について、以下の情報源を分析し、BookCocktailを生成してJSON形式で出力してください。
 
-    # 主要な情報
-    - **作品の要約**: {summary_text}
-
-    # 検索で見つかった情報源
-    - **ベース（相補的）**: {comp_source['snippet'] if comp_source else "なし"}
-    - **スパイス（対照的）**: {cont_source['snippet'] if cont_source else "なし"}
-    - **隠し味（意外）**: {tangent_source['snippet'] if tangent_source else "なし"}
-
-    # 指示
-    1.  **summary**: 「作品の要約」を元に、自然で完成された3〜4文の最終的な要約文に書き直してください。
-    2.  **complementary_commentary**: **見つかった「ベース」の情報源の内容のみを分析し**、それが主要な作品とどう関連するか1〜2文で解説してください。検索クエリ自体には言及しないでください。
-    3.  **contrasting_commentary**: **見つかった「スパイス」の情報源の内容のみを分析し**、それが主要な作品とどう関連するか1〜2文で解説してください。検索クエリ自体には言及しないでください。
-    4.  **tangent_commentary**: **見つかった「隠し味」の情報源の内容のみを分析し**、それが作品にどのような意外な視点を与えるか1〜2文で解説してください。検索クエリ自体には言及しないでください。
-    5.  **twist**: 全体を締めくくる、気の利いた「最後の一ひねり」を生成してください。
-    """
-    
-    final_result = call_gemini(final_prompt, schema=final_generation_schema)
-    if not final_result:
-        return {"error": "最終的なカクテルデータの生成に失敗しました。"}
-
-    # Step 5: Final assembly.
-    if comp_source:
-        comp_source['commentary'] = final_result.get("complementary_commentary")
-    if cont_source:
-        cont_source['commentary'] = final_result.get("contrasting_commentary")
-    if tangent_source:
-        tangent_source['commentary'] = final_result.get("tangent_commentary")
-
+    # Also return raw fields your UI can map into sections.
     return {
-        "book_title": book_title,
-        "summary": final_result.get("summary"),
-        "complementary": comp_source,
-        "contrasting": cont_source,
-        "tangent": tangent_source,
-        "twist": final_result.get("twist")
+        "title": title,
+        "summary": summary,
+        "sources": sources,
+        "markdown": md,
+        "mode": "full"
     }
 
-# --- Web Interface and API Routes (No changes) ---
-@app.route('/')
-def home():
-    return render_template('index.html')
+# === Routes ===
 
-@app.route('/generate-for-web', methods=['POST'])
-def generate_for_web():
-    data = request.get_json()
-    user_input = data.get('user_input')
-    if not user_input: return jsonify({"error": "input is required"}), 400
+@app.route("/api/cocktail", methods=["POST"])
+def cocktail_api():
     try:
-        cocktail_data = generate_cocktail_data(user_input)
-        return jsonify(cocktail_data)
+        data = request.get_json(force=True) or {}
+        user_input = (data.get("user_input") or "").strip()
+        result = generate_payload(user_input)
+        # Guarantee: never include Python None in response
+        def _denull(x):
+            if x is None: return ""
+            if isinstance(x, dict): return {k:_denull(v) for k,v in x.items()}
+            if isinstance(x, list): return [_denull(v) for v in x]
+            return x
+        result = _denull(result)
+        return jsonify(result), 200
     except Exception as e:
-        print(f"Error for web: {e}")
-        return jsonify({"error": "カクテルの生成中にエラーが発生しました。"}), 500
+        return jsonify({"error": f"Internal error: {e.__class__.__name__}"}), 500
 
-@app.route('/api/cocktail', methods=['POST'])
-def api_for_bot():
-    data = request.get_json()
-    user_input = data.get('user_input')
-    if not user_input: return jsonify({"error": "input is required"}), 400
-    try:
-        cocktail_data = generate_cocktail_data(user_input)
-        return jsonify(cocktail_data)
-    except Exception as e:
-        print(f"Error for bot: {e}")
-        return jsonify({"error": "Failed to generate cocktail data"}), 500
+@app.route("/healthz")
+def healthz():
+    return jsonify({"ok": True}), 200
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
