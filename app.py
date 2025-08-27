@@ -1,6 +1,6 @@
-# app.py (Stable Unified Version with AI-driven Search Queries)
-# This definitive version has Gemini generate the optimal Google Search queries
-# to ensure relevant results are always found.
+# app.py (Definitive Version with Hallucination Guard and Prompt Refinement)
+# This version prevents hallucinations for non-existent works and improves
+# the naturalness of the generated commentaries.
 
 import os
 import random
@@ -93,60 +93,79 @@ def generate_cocktail_data(user_input):
         summary_text = "\n".join(lines[1:]).replace("要約:", "").strip()
     else:
         summary_source = google_search(f'"{book_title}" 要約 OR あらすじ')
-        summary_text = summary_source['snippet'] if summary_source else book_title
+        # --- [最重要改善点 1] ---
+        # If no summary is found for a title, the work likely doesn't exist. Stop here.
+        if not summary_source:
+            return {"error": "入力された書籍や記事が見つかりませんでした。実在する作品名を入力してください。"}
+        summary_text = summary_source['snippet']
 
-    # --- [最重要改善点] ---
-    # Step 2: Have Gemini generate everything, including the search queries themselves.
-    cocktail_schema = {
+    # Step 2: Have Gemini generate search queries.
+    query_generation_schema = {
         "type": "object", "properties": {
-            "summary": {"type": "string"},
-            "complementary_query": {"type": "string"}, "complementary_commentary": {"type": "string"},
-            "contrasting_query": {"type": "string"}, "contrasting_commentary": {"type": "string"},
-            "tangent_query": {"type": "string"}, "tangent_commentary": {"type": "string"},
-            "twist": {"type": "string"}
-        }, "required": ["summary", "complementary_query", "complementary_commentary", "contrasting_query", "contrasting_commentary", "tangent_query", "tangent_commentary", "twist"]
+            "complementary_query": {"type": "string"},
+            "contrasting_query": {"type": "string"},
+            "tangent_query": {"type": "string"}
+        }, "required": ["complementary_query", "contrasting_query", "tangent_query"]
     }
+    query_prompt = f"『{book_title}』という作品（要約：{summary_text}）について、以下の3つの目的のGoogle検索クエリ（日本語）を生成し、JSON形式で出力してください。\n1. complementary_query: 作品を補強する学術論文や深い分析記事を見つけるためのクエリ。\n2. contrasting_query: 作品に批判的な視点を提供する記事を見つけるためのクエリ。\n3. tangent_query: 作品に意外な視点を与える記事を見つけるためのクエリ。"
     
-    main_prompt = f"""
-    『{book_title}』という作品（要約：{summary_text}）について、BookCocktailを生成してください。
-
-    # 指示
-    以下の項目を考察し、JSON形式で出力してください。
-    1.  **summary**: 提供された要約を元に、自然で完成された3〜4文の最終的な要約文を生成。
-    2.  **complementary_query**: この作品を補強するような学術論文や深い分析記事を見つけるための、最適なGoogle検索クエリ（日本語）を生成。
-    3.  **complementary_commentary**: 上記クエリで見つかるであろう記事が、作品とどう関連するかの解説文を生成。
-    4.  **contrasting_query**: この作品に批判的な視点を提供する記事を見つけるための、最適なGoogle検索クエリ（日本語）を生成。
-    5.  **contrasting_commentary**: 上記クエリで見つかるであろう記事が、作品とどう関連するかの解説文を生成。
-    6.  **tangent_query**: この作品に意外な視点（例：「経営者の自叙伝」に対する「サイコパスの特性」）を与える記事を見つけるための、最適なGoogle検索クエリ（日本語）を生成。
-    7.  **tangent_commentary**: 上記クエリで見つかるであろう記事が、作品とどう関連するかの解説文を生成。
-    8.  **twist**: 全体を締めくくる、気の利いた「最後の一ひねり」を生成。
-    """
-    
-    gemini_result = call_gemini(main_prompt, schema=cocktail_schema)
-
-    if not gemini_result:
-        return {"error": "Failed to generate cocktail data from Gemini."}
+    queries = call_gemini(query_prompt, schema=query_generation_schema)
+    if not queries:
+        return {"error": "検索クエリの生成に失敗しました。"}
 
     # Step 3: Execute the AI-generated search queries.
-    comp_source = google_search(gemini_result.get("complementary_query"))
-    cont_source = google_search(gemini_result.get("contrasting_query"))
-    tangent_source = google_search(gemini_result.get("tangent_query"))
+    comp_source = google_search(queries.get("complementary_query"))
+    cont_source = google_search(queries.get("contrasting_query"))
+    tangent_source = google_search(queries.get("tangent_query"))
 
-    # Step 4: Final assembly with AI-generated commentaries.
+    # Step 4: Generate the final text based on the ACTUAL search results.
+    final_generation_schema = {
+        "type": "object", "properties": {
+            "summary": {"type": "string"}, "complementary_commentary": {"type": "string"},
+            "contrasting_commentary": {"type": "string"}, "tangent_commentary": {"type": "string"},
+            "twist": {"type": "string"}
+        }, "required": ["summary", "complementary_commentary", "contrasting_commentary", "tangent_commentary", "twist"]
+    }
+    # --- [最重要改善点 2] ---
+    # The prompt for commentaries is now much more specific.
+    final_prompt = f"""
+    『{book_title}』という作品について、以下の情報源を分析し、BookCocktailを生成してJSON形式で出力してください。
+
+    # 主要な情報
+    - **作品の要約**: {summary_text}
+
+    # 検索で見つかった情報源
+    - **ベース（相補的）**: {comp_source['snippet'] if comp_source else "なし"}
+    - **スパイス（対照的）**: {cont_source['snippet'] if cont_source else "なし"}
+    - **隠し味（意外）**: {tangent_source['snippet'] if tangent_source else "なし"}
+
+    # 指示
+    1.  **summary**: 「作品の要約」を元に、自然で完成された3〜4文の最終的な要約文に書き直してください。
+    2.  **complementary_commentary**: **見つかった「ベース」の情報源の内容のみを分析し**、それが主要な作品とどう関連するか1〜2文で解説してください。検索クエリ自体には言及しないでください。
+    3.  **contrasting_commentary**: **見つかった「スパイス」の情報源の内容のみを分析し**、それが主要な作品とどう関連するか1〜2文で解説してください。検索クエリ自体には言及しないでください。
+    4.  **tangent_commentary**: **見つかった「隠し味」の情報源の内容のみを分析し**、それが作品にどのような意外な視点を与えるか1〜2文で解説してください。検索クエリ自体には言及しないでください。
+    5.  **twist**: 全体を締めくくる、気の利いた「最後の一ひねり」を生成してください。
+    """
+    
+    final_result = call_gemini(final_prompt, schema=final_generation_schema)
+    if not final_result:
+        return {"error": "最終的なカクテルデータの生成に失敗しました。"}
+
+    # Step 5: Final assembly.
     if comp_source:
-        comp_source['commentary'] = gemini_result.get("complementary_commentary")
+        comp_source['commentary'] = final_result.get("complementary_commentary")
     if cont_source:
-        cont_source['commentary'] = gemini_result.get("contrasting_commentary")
+        cont_source['commentary'] = final_result.get("contrasting_commentary")
     if tangent_source:
-        tangent_source['commentary'] = gemini_result.get("tangent_commentary")
+        tangent_source['commentary'] = final_result.get("tangent_commentary")
 
     return {
         "book_title": book_title,
-        "summary": gemini_result.get("summary"),
+        "summary": final_result.get("summary"),
         "complementary": comp_source,
         "contrasting": cont_source,
         "tangent": tangent_source,
-        "twist": gemini_result.get("twist")
+        "twist": final_result.get("twist")
     }
 
 # --- Web Interface and API Routes (No changes) ---
